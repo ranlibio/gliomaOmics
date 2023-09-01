@@ -6,4 +6,4 @@ Contact
 ------
 Please contact us:  
 Ran Li: ranli1993@zju.edu.cn  
-Long Zhang: zemin@pku.edu.cn
+Long Zhang: L_Zhang@zju.edu.cn
