@@ -1,0 +1,81 @@
+#----- library -----#
+
+library(maftools)
+library(ggplot2)
+library(pheatmap)
+library(NMF)
+library(stringr)
+library(RColorBrewer)
+library(SomaticSignatures)
+library(forcats)
+library(BSgenome.Hsapiens.UCSC.hg38, quietly = TRUE)
+
+#----- load data -----#
+
+#MAF file and clinical information from different cohorts
+cohort.mut <- read.maf(maf = "./cohort.mutation", clinicalData = "./cohort.clinicalInfor.txt", #change maf file and clinical data
+                       vc_nonSyn = c("Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site", 
+                                     "Translation_Start_Site", "Nonsense_Mutation", "Nonstop_Mutation", 
+                                     "Multi_Hit", "In_Frame_Del", "In_Frame_Ins","Missense_Mutation"))
+
+#----- Figure 1B and S2A -----#
+
+#TMB
+TMB <- cohort.mut@variants.per.sample$Variants/38
+names(TMB) <- as.character(cohort.mut@variants.per.sample$Tumor_Sample_Barcode)
+cohort.mut@clinical.data$TMB <- TMB[as.character(cohort.mut@clinical.data$Tumor_Sample_Barcode)]
+hypermut <- names(TMB)[which(TMB>50)]
+
+#Three WHO subtypes of adult-type diffuse gliomas
+IDHmut_codel <- cohort.mut@clinical.data$Tumor_Sample_Barcode[which(cohort.mut@clinical.data$WHO_2021_subtype=="IDHmut-codel")]
+IDHmut_noncodel <- cohort.mut@clinical.data$Tumor_Sample_Barcode[which(cohort.mut@clinical.data$WHO_2021_subtype=="IDHmut-noncodel")]
+IDHwt <- cohort.mut@clinical.data$Tumor_Sample_Barcode[which(cohort.mut@clinical.data$WHO_2021_subtype=="IDHwt")]
+
+IDHmut_codel.mut <- subsetMaf(maf = cohort.mut, tsb = setdiff(IDHmut_codel,hypermut))
+IDHmut_noncodel.mut <- subsetMaf(maf = cohort.mut, tsb = setdiff(IDHmut_noncodel,hypermut))
+IDHwt.mut <- subsetMaf(maf = cohort.mut, tsb = setdiff(IDHwt,hypermut))
+
+#Oncoplot
+top20 <- c("IDH1","TP53","TTN","CIC","MUC16","PIK3R1","OBSCN","NF1","ATRX",
+           "USH2A","EGFR","FUBP1","HMCN2","CCDC168","PLEC","APOB","DNAH3","DNAH9",
+           "PIK3CA","PTEN")
+
+vc_cols <- brewer.pal(n = 8, name = 'Set1')
+names(vc_cols) <- c(
+  'Frame_Shift_Del',
+  'Missense_Mutation',
+  'Nonsense_Mutation',
+  'Multi_Hit',
+  'Frame_Shift_Ins',
+  'In_Frame_Ins',
+  'In_Frame_Del',
+  'Splice_Site'
+)
+
+#MAF object from three subtypes of adult-type diffuse gliomas
+oncoplot(maf = IDHmut_codel.mut, fontSize = 0.6,showTumorSampleBarcodes = F, #change maf object
+         genes = top20,
+         sortByAnnotation = TRUE,colors = vc_cols,bgCol="grey80",
+         annoBorderCol="white",showTitle=FALSE,keepGeneOrder = TRUE,
+         legendFontSize=1,draw_titv=TRUE,includeColBarCN=FALSE,
+         drawRowBar = FALSE,sepwd_genes=0.5,sepwd_samples=0.5,
+         drawColBar = FALSE,barcode_mar=2,removeNonMutated=FALSE,
+         annotationFontSize=0.8,anno_height=3,
+         groupAnnotationBySize=FALSE)
+
+
+#----- Figure 1G and S2F -----#
+plotData <- data.frame(x=as.factor(cohort.mut@clinical.data$WHO_2021_subtype),
+                       y=cohort.mut@clinical.data$TMB)
+plotData <- plotData[-which(plotData$y>50),]
+
+ggplot(plotData,aes(x=x,y=y,fill=x))+
+  geom_boxplot(outlier.colour=NA,width=0.3)+
+  geom_jitter(width =0.05,shape = 16,size=0.8,fill="black")+
+  scale_fill_manual(values = rev(brewer.pal(3,"Set1")))+
+  scale_y_continuous(breaks = seq(0,5,1),limits = c(0,5))+
+  ylab("Mutations / Mb")+xlab("")+
+  theme_bw()+theme(panel.grid = element_blank(),legend.position = "none")
+
+#T-test
+t.test(plotData$y[which(plotData$x=="IDHmut-codel")],plotData$y[which(plotData$x=="IDHwt")])
